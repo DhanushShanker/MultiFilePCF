@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest >
+  <control namespace="MultiFileUploader" constructor="FileUploaderControl" version="0.0.1" display-name-key="ATSMultiFile" description-key="ATSMultiDescription" control-type="standard">
+    <property name="accountId" display-name-key="Property_Display_Key" description-key="Property_Desc_Key" of-type="SingleLine.Text" usage="bound" required="true" />
+    <!-- Define the properties for the control -->
+    <property name="FileData" display-name-key="FileData_DisplayName" description-key="FileData_Description" of-type="SingleLine.Text" usage="bound" required="false" />
+
+    <!-- Resources for the control -->
+    <resources>
+      <code path="index.ts" order="1"/>
+      <css path="index.css"/>
+    </resources>
+
+    <!-- Feature usage -->
+    <feature-usage>
+      <uses-feature name="Utility" required="true" />
+      <uses-feature name="WebAPI" required="true" />
+    </feature-usage>
+
+  </control>
+</manifest>
