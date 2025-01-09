@@ -68,7 +68,7 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
 
     
     // Ensure the parent container has position relative
-    this.container.style.position = 'relative'; // Apply position: relative to the parent container
+    this.container.style.position = 'relative'; // Apply position: relative to parent container
 
     // Create the file preview container
     const filePreviewContainer = document.createElement('div');
