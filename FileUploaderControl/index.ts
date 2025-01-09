@@ -2,16 +2,14 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 
 import * as XLSX from "xlsx"; // Excel file handling
 import * as mammoth from "mammoth"; // Word file handling
+import { renderAsync } from "docx-preview";
 
-interface FileRecord {
-    new_filesid: string; // GUID of the file
-    new_filename: string; // File name
-    new_filecontent?: string; // Base64-encoded content (optional if not retrieved)
-    new_mimetype?: string; // MIME type (optional if not retrieved)
-    new_accountid?: string; // Associated account ID (optional if not retrieved)
-    createdon: string; // Date created
+interface UploadedFile {
+    id: string;        // Unique identifier for the file (e.g., annotation ID)
+    filename: string;  // Name of the file
+    content: string; // Base64-encoded file content
+    mimeType: string; // MIME type of the file (e.g., "application/pdf", "image/jpeg")
 }
-
 export class FileUploaderControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
     private container: HTMLDivElement;
     private fileInput: HTMLInputElement;
@@ -19,11 +17,9 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
     private chooseFilesButton: HTMLButtonElement;
     private closePreviewButton: HTMLButtonElement | null = null; 
     private notifyOutputChanged: () => void;
-    
-
     private uploadedFiles: File[] = []; // To hold the list of uploaded files.
-
     private context: ComponentFramework.Context<IInputs>;
+    private fileIdMap: Map<string, string> = new Map<string, string>();
 
     constructor() {}
 
@@ -33,6 +29,7 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         state: ComponentFramework.Dictionary,
         container: HTMLDivElement
     ): void {
+        this.context = context;
         this.container = container;
         this.notifyOutputChanged = notifyOutputChanged;
 
@@ -64,43 +61,61 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         this.fileList = document.createElement("div");
         this.fileList.id = "file-list";
 
-        
-
         // Append elements to the container
         this.container.appendChild(this.chooseFilesButton);
         this.container.appendChild(this.fileInput);
         this.container.appendChild(this.fileList);
 
-        // Create the file preview container
-        const filePreviewContainer = document.createElement('div');
-        filePreviewContainer.id = "file-preview-container";
-        filePreviewContainer.style.display = 'none';
-        filePreviewContainer.innerHTML = `
-            <h3>File Preview</h3>
-            <div id="file-preview-content"></div>
-            <button id="close-preview-button">Close Preview</button>
-        `;
-        this.container.appendChild(filePreviewContainer);
+    
+    // Ensure the parent container has position relative
+    this.container.style.position = 'relative'; // Apply position: relative to the parent container
 
-        this.closePreviewButton = document.getElementById("close-preview-button") as HTMLButtonElement;
+    // Create the file preview container
+    const filePreviewContainer = document.createElement('div');
+    filePreviewContainer.id = "file-preview-container";
+    filePreviewContainer.style.display = 'none';
+    filePreviewContainer.style.position = 'fixed'; // The preview container will be fixed to the viewport
+    filePreviewContainer.style.top = '50%'; // Center vertically (50% of the viewport height)
+    filePreviewContainer.style.left = '50%'; // Center horizontally (50% of the viewport width)
+    filePreviewContainer.style.transform = 'translate(-50%, -50%)'; // Adjust for exact center
+    filePreviewContainer.style.width = '80%'; // Adjust width for a rectangular shape
+    filePreviewContainer.style.height = '80%'; // Adjust height for a rectangular shape
+    filePreviewContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'; // Semi-transparent background
+    filePreviewContainer.style.zIndex = '10000'; // Make sure it overlaps other content
+    filePreviewContainer.style.padding = '20px'; // Padding for content inside the preview container
+    filePreviewContainer.style.overflowY = 'auto'; // Allow scrolling if content exceeds height
+    filePreviewContainer.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.3)'; // Optional: Add shadow for better visibility
+    filePreviewContainer.style.borderRadius = '10px'; // Slight rounding for rectangle edges
+    filePreviewContainer.innerHTML = `
+        <h3 style="margin: 0;">File Preview</h3>
+        <button id="close-preview-button" 
+            style="position: absolute; 
+                   top: 15px; 
+                   right: 20px; 
+                   background-color: #f44336; 
+                   color: white; 
+                   border: none; 
+                   border-radius: 5px; 
+                   padding: 5px 10px; 
+                   cursor: pointer;">Close Preview</button>
+    <div id="file-preview-content" style="margin-top: 20px;"></div>
+`;
+
+    // Append the preview container to the body (not this.container)
+    document.body.appendChild(filePreviewContainer);
+
+    // Handle the close button functionality
+    this.closePreviewButton = document.getElementById("close-preview-button") as HTMLButtonElement;
     if (this.closePreviewButton) {
         this.closePreviewButton.addEventListener("click", () => this.closePreview());
-    }
-    const accountId = context.parameters.accountId.raw;
+}
+
+    const accountId = this.context.parameters.accountId.raw;
     if (accountId) {
-        this.retrieveFilesForAccount(accountId).then((files) => {
-            files.forEach((file) => {
-                const fileObj = new File([], file.new_filename, { type: file.new_mimetype || "" });
-                this.addFileToList(fileObj);
-            });
-        });
-    } else {
-        console.warn("No account ID provided. Skipping file retrieval.");
+        this.retrieveFiles(accountId);  // Retrieve files associated with the account
     }
-
-    }
-
     
+}
 
     private triggerFileInput(): void {
         console.log("Button clicked, triggering file input.");
@@ -113,25 +128,42 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
             Array.from(input.files).forEach((file) => {
                 this.uploadedFiles.push(file);
                 this.addFileToList(file);
-
+    
                 const accountId = this.context.parameters.accountId.raw;
                 if (!accountId) {
                     console.error("Account ID is null or undefined. File upload aborted.");
                     return;
                 }
-                this.saveFile(file, accountId).then((fileId) => {
-                    if (fileId) {
-                        console.log("File saved successfully, File ID: ", fileId);
-                    } else {
-                        console.log("Failed to save the file");
-                    } 
+    
+                const reader = new FileReader();
+    
+                // Read the file content as ArrayBuffer
+                reader.onload = async () => {
+                    try {
+                        const fileContent = reader.result as ArrayBuffer;
+                        const base64FileContent = this.base64ArrayBuffer(fileContent);
+    
+                        console.log(`Uploading file: ${file.name}`);
+                        await this.uploadFile(file.name, file.type, base64FileContent, accountId);
+                    } catch (error) {
+                        console.error(`Error uploading file (${file.name}):`, error);
+                        alert(`Failed to upload file: ${file.name}`);
+                    }
+                };
+    
+                // Handle errors while reading the file
+                reader.onerror = (e) => {
+                    console.error(`Error reading file (${file.name}):`, e);
+                    alert(`Failed to read file: ${file.name}`);
+                };
+    
+                reader.readAsArrayBuffer(file); // Trigger file read
             });
-
-            // Notify that output has changed if needed.
+    
+            // Notify that output has changed if needed
             this.notifyOutputChanged();
-        });
+        }
     }
-}
 
     private addFileToList(file: File): void {
         const fileItem = document.createElement("div");
@@ -144,7 +176,7 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         
         const downloadButton = this.createFileOptionButton("Download", () => this.downloadFile(file));
         const previewButton = this.createFileOptionButton("Preview", () => this.previewFile(file));
-        const deleteButton = this.createFileOptionButton("Delete", () => this.deleteFile(file));
+        const deleteButton = this.createFileOptionButton("Delete", () => this.deleteFile(file,fileItem));
 
         fileOptions.appendChild(downloadButton);
         fileOptions.appendChild(previewButton);
@@ -333,28 +365,20 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         }
     }
     
-
-    private previewWord(file: File): void {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const data = e.target?.result as ArrayBuffer;
-            const arrayBuffer = new Uint8Array(data);
-            // Assuming you're using Mammoth.js (or similar) to parse Word document
-            mammoth.convertToHtml({ arrayBuffer: data }).then((result) => {
-                document.getElementById("file-preview-content")!.innerHTML = result.value;
-                return result;
-            })
-            .catch((error) => {
-                console.error("Error converting Word document:", error);
-                document.getElementById("file-preview-content")!.innerHTML = "<p>Error rendering document</p>";
-                throw error;
-            });
-        };
-        reader.onerror = (error) => {
-            console.error("Error reading file:", error);
-            document.getElementById("file-preview-content")!.innerHTML = "<p>Error reading file</p>";
-        };
-        reader.readAsArrayBuffer(file);
+    private async previewWord(file: File): Promise<void> {
+        const container = document.getElementById("file-preview-content");
+        if (!container) {
+            console.error("Error: Element with ID 'file-preview-content' not found.");
+            return; // Exit early if the container is null
+        }
+    
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            await renderAsync(arrayBuffer, container);
+        } catch (error: unknown) {
+            console.error("Error rendering document:", error);
+            container.innerHTML = "<p>Error rendering document</p>";
+        }
     }
 
     private closePreview(): void {
@@ -364,21 +388,36 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         }
     }
 
-    // Implement the deleteFile method
-    private deleteFile(file: File): void {
-        const fileIndex = this.uploadedFiles.indexOf(file);
-        if (fileIndex !== -1) {
-            // Remove the file from the array
-            this.uploadedFiles.splice(fileIndex, 1);
-            // Re-render the file list
-            this.fileList.innerHTML = ''; // Clear the file list
-            this.uploadedFiles.forEach((file) => {
-                this.addFileToList(file); // Re-add files to the list
-            });
-            // Notify that output has changed if needed.
-            this.notifyOutputChanged();
+    private async deleteFile(file: File, fileItem: HTMLDivElement): Promise<void> {
+        try {
+            // Retrieve the file ID from the map
+            const fileId = this.fileIdMap.get(file.name);
+    
+            if (!fileId) {
+                console.error("File ID not found. Cannot delete from server.");
+                return;
+            }
+    
+            // Delete the file from the server (Notes entity)
+            await this.context.webAPI.deleteRecord("annotation", fileId);
+            console.log(`File deleted from server: ${fileId}`);
+        // Remove the file from the uploadedFiles array
+        const index = this.uploadedFiles.indexOf(file);
+        if (index > -1) {
+            this.uploadedFiles.splice(index, 1);
         }
+    
+        // Remove the file item from the UI
+        this.fileList.removeChild(fileItem);
+    
+        console.log(`File deleted: ${file.name}`);
+    
+        // Optionally, notify output change if necessary
+        this.notifyOutputChanged();
+    }catch (error) {
+        console.error("Error deleting file from server:", error);
     }
+}
 
     // Implement the updateView method
     public updateView(context: ComponentFramework.Context<IInputs>): void {
@@ -400,63 +439,28 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         this.chooseFilesButton.removeEventListener("click", this.triggerFileInput.bind(this));
     }
 
-    private async saveFile(file: File, accountId: string): Promise<string | null> {
-        if (!accountId || accountId.length === 0) {
-            console.error("No valid accountId provided");
-            return null;
+    private async uploadFile(
+        filename: string,
+        filetype: string,
+        base64FileContent: string,
+        accountId: string
+    ): Promise<void> {
+        const annotationEntity = {
+            documentbody: base64FileContent,
+            filename: filename,
+            mimetype: filetype,
+            //"objectid_account@odata.bind": `/accounts(${accountId})`,
+            "objectid_ats_job_seeker@odata.bind": `/ats_job_seekers(${accountId})`,
+            subject: "Uploaded File",
+        };
+ 
+        try {
+            const response = await this.context.webAPI.createRecord("annotation", annotationEntity);
+            console.log("File uploaded successfully as annotation:", response.id);
+        } catch (error) {
+            console.error("Error creating annotation record:", error);
+            throw error;
         }
-    
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-    
-            reader.onload = async (event) => {
-                try {
-                    const fileContent = event.target?.result as ArrayBuffer;
-                    const base64Content = this.base64ArrayBuffer(fileContent);
-    
-                    // Prepare the file data for the Files entity
-                    const fileData = {
-                        "new_accountid@odata.bind": `/accounts(${accountId})`, // Associate the file with the account
-                        "new_filename": file.name, // File name
-                        "new_filecontent": base64Content, // Base64 encoded file content
-                        "new_mimetype": file.type, // File MIME type
-                    };
-    
-                    // Use Xrm.Utility.getGlobalContext().getClientUrl() to get the client URL
-                    const clientUrl = Xrm.Utility.getGlobalContext().getClientUrl();
-    
-                    const response = await fetch(`${clientUrl}/api/data/v9.2/new_files`, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "OData-MaxVersion": "4.0",
-                            "OData-Version": "4.0",
-                            "Accept": "application/json",
-                        },
-                        body: JSON.stringify(fileData),
-                    });
-    
-                    if (response.ok) {
-                        const result = await response.json();
-                        console.log("File saved successfully with ID:", result.new_filesid);
-                        resolve(result.new_filesid); // Resolve with the File record ID
-                    } else {
-                        console.error("Failed to save file:", await response.text());
-                        resolve(null); // Resolve with null on failure
-                    }
-                } catch (error) {
-                    console.error("Error saving file:", error);
-                    resolve(null); // Resolve with null on error
-                }
-            };
-    
-            reader.onerror = () => {
-                console.error("Error reading the file");
-                resolve(null); // Resolve with null on file read error
-            };
-    
-            reader.readAsArrayBuffer(file);
-        });
     }
     
     private base64ArrayBuffer(arrayBuffer: ArrayBuffer): string {
@@ -467,39 +471,72 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         }
         return btoa(binary);
     }
+
+    private decodeBase64(base64: string): ArrayBuffer {
+        const binaryString = atob(base64);  // Decode base64 to binary string
+        const len = binaryString.length;
+        const arrayBuffer = new ArrayBuffer(len);
+        const uint8Array = new Uint8Array(arrayBuffer);
     
-    private async retrieveFilesForAccount(accountId: string): Promise<FileRecord[]> {
-        if (!accountId || accountId.length === 0) {
-            console.error("No valid accountId provided");
-            return [];
+        for (let i = 0; i < len; i++) {
+            uint8Array[i] = binaryString.charCodeAt(i);
         }
     
-        // Use Xrm.Utility.getGlobalContext().getClientUrl() to get the client URL
-        const clientUrl = Xrm.Utility.getGlobalContext().getClientUrl();
+        return arrayBuffer;
+    }
+
+    private async retrieveFiles(accountId: string): Promise<void> {
+        if (!accountId) {
+            console.error("Account ID is null or undefined. Cannot retrieve files.");
+            return;
+        }
     
         try {
-            // Query the Files entity for files associated with the account
-            const response = await fetch(`${clientUrl}/api/data/v9.2/new_files?$filter=_new_accountid_value eq ${accountId}`, {
-                method: "GET",
-                headers: {
-                    "Accept": "application/json",
-                    "OData-MaxVersion": "4.0",
-                    "OData-Version": "4.0",
-                },
+            console.log("Retrieving files for account:", accountId);
+    
+            // Replace with your actual API call logic to fetch files
+            const retrievedFiles: UploadedFile[] = await this.fetchFilesFromServer(accountId);
+    
+            // Simulate `File` objects for each retrieved file and display them
+            retrievedFiles.forEach((file) => {
+                const fileContent = file.content ? this.decodeBase64(file.content) : null;
+                if (fileContent) {
+                const simulatedFile = new File([fileContent], file.filename || "Unknown file",{ type: file.mimeType });
+                this.addFileToList(simulatedFile);
+                this.fileIdMap.set(simulatedFile.name, file.id);
+            } else {
+                console.error("File content is missing or invalid.");
+            }
             });
     
-            if (response.ok) {
-                const result = await response.json();
-                console.log("Files retrieved successfully:", result.value);
-                return result.value; // Return the list of files
-            } else {
-                console.error("Failed to retrieve files:", await response.text());
-                return [];
-            }
         } catch (error) {
             console.error("Error retrieving files:", error);
-            return [];
         }
     }
     
+    private async fetchFilesFromServer(accountId: string): Promise<UploadedFile[]> {
+        const query = `?$filter=_objectid_value eq ${accountId}`;
+        try {
+            const result = await this.context.webAPI.retrieveMultipleRecords("annotation", query);
+    
+            if (result.entities.length > 0) {
+                console.log("Retrieved files:", result.entities);
+    
+                // Map entities to the UploadedFile type
+                return result.entities.map((entity) => ({
+                    id: entity["annotationid"],  // Assuming annotationid is the unique file identifier
+                    filename: entity["filename"] || "Unknown file",
+                    content: entity["documentbody"] || "", // Assuming `documentbody` contains the file content
+                    mimeType: entity["mimetype"] || "application/octet-stream", // Default to generic binary stream if MIME type is unavailable
+                    // Add additional fields here if necessary
+                }));
+            } else {
+                console.log("No files found for the given account.");
+                return [];
+            }
+        } catch (error) {
+            console.error("Error fetching files from server:", error);
+            throw error; // Re-throw the error to handle it in the calling function
+        }
+    }
 }
