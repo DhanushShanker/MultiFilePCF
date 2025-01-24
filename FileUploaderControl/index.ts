@@ -110,9 +110,21 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         this.closePreviewButton.addEventListener("click", () => this.closePreview());
 }
 
-    const accountId = this.context.parameters.accountId.raw;
+    // const accountId = this.context.parameters.accountId.raw;
+    // if (accountId) {
+    //     this.retrieveFiles(accountId);  // Retrieve files associated with the account
+    // }
+    // Try to get the record ID using Xrm.Page (legacy method)
+    let accountId = Xrm?.Page?.data?.entity?.getId();
+ 
     if (accountId) {
-        this.retrieveFiles(accountId);  // Retrieve files associated with the account
+        // Remove curly braces and convert to lowercase
+        accountId = accountId.replace("{", "").replace("}", "").toLowerCase();
+        console.log("Current Record GUID (Xrm.Page): " + accountId);
+
+        this.retrieveFiles(accountId);
+    } else {
+        console.error("No record ID found.");
     }
     
 }
@@ -129,11 +141,23 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
                 this.uploadedFiles.push(file);
                 this.addFileToList(file);
     
-                const accountId = this.context.parameters.accountId.raw;
-                if (!accountId) {
-                    console.error("Account ID is null or undefined. File upload aborted.");
-                    return;
-                }
+                // const accountId = this.context.parameters.accountId.raw;
+                // if (!accountId) {
+                //     console.error("Account ID is null or undefined. File upload aborted.");
+                //     return;
+                // }
+                // Try to get the record ID using Xrm.Page (legacy method)
+        let accountId = Xrm?.Page?.data?.entity?.getId();
+ 
+        if (accountId) {
+            // Remove curly braces and convert to lowercase
+            accountId = accountId.replace("{", "").replace("}", "").toLowerCase();
+            console.log("Current Record GUID (Xrm.Page): " + accountId);
+ 
+            this.retrieveFiles(accountId);
+        } else {
+            console.error("No record ID found.");
+        }
     
                 const reader = new FileReader();
     
@@ -445,12 +469,23 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         base64FileContent: string,
         accountId: string
     ): Promise<void> {
+
+        const entityMetadata = Xrm?.Page?.data?.entity?.getEntityName();
+
+        const entitySetName = await Xrm.Utility.getEntityMetadata(entityMetadata, []).then((result) => {
+            return result.EntitySetName;
+        }).catch((error) => {
+            console.error("Error fetching entity metadata:", error);
+            throw error; // Re-throw to propagate error if necessary
+        });
+
         const annotationEntity = {
             documentbody: base64FileContent,
             filename: filename,
             mimetype: filetype,
             //"objectid_account@odata.bind": `/accounts(${accountId})`,
-            "objectid_ats_job_seeker@odata.bind": `/ats_job_seekers(${accountId})`,
+            //"objectid_ats_job_seeker@odata.bind": `/ats_job_seekers(${accountId})`,
+            [`objectid_${entityMetadata}@odata.bind`]: `/${entitySetName}(${accountId})`,// It will get the entity name dynamically
             subject: "Uploaded File",
         };
  
