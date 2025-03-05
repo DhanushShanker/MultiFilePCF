@@ -1,0 +1,20 @@
+2025-03-05 17:41:37.640 - Info	
+Packing C:\DHANUSH\MultiFilePCF\FileUploaderControl\UPLOADER\obj\Debug\Metadata to bin\Debug\UPLOADER.zip
+
+2025-03-05 17:41:37.657 - Info	Processing Component: Entities
+2025-03-05 17:41:37.660 - Info	Processing Component: Roles
+2025-03-05 17:41:37.661 - Info	Processing Component: Workflows
+2025-03-05 17:41:37.664 - Info	Processing Component: FieldSecurityProfiles
+2025-03-05 17:41:37.665 - Info	Processing Component: Templates
+2025-03-05 17:41:37.666 - Info	Processing Component: EntityMaps
+2025-03-05 17:41:37.666 - Info	Processing Component: EntityRelationships
+2025-03-05 17:41:37.669 - Info	Processing Component: OrganizationSettings
+2025-03-05 17:41:37.669 - Info	Processing Component: optionsets
+2025-03-05 17:41:37.669 - Info	Processing Component: CustomControls
+2025-03-05 17:41:37.675 - Info	 - MultiFileUploader.FileUploaderControl
+2025-03-05 17:41:37.683 - Info	Processing Component: SolutionPluginAssemblies
+2025-03-05 17:41:37.683 - Info	Processing Component: EntityDataProviders
+2025-03-05 17:41:37.691 - Info	Processing Sharded Component Files
+2025-03-05 17:41:37.770 - Info	
+Unmanaged Pack complete.
+

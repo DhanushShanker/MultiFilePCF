@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "jKEitjD7OPk=",
+  "success": true,
+  "projectFilePath": "C:\\DHANUSH\\MultiFilePCF\\FileUploaderControl\\UPLOADER\\UPLOADER.cdsproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\dhanu\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.0\\microsoft.netframework.referenceassemblies.1.0.0.nupkg.sha512",
+    "C:\\Users\\dhanu\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net462\\1.0.0\\microsoft.netframework.referenceassemblies.net462.1.0.0.nupkg.sha512",
+    "C:\\Users\\dhanu\\.nuget\\packages\\microsoft.powerapps.msbuild.pcf\\1.40.4\\microsoft.powerapps.msbuild.pcf.1.40.4.nupkg.sha512",
+    "C:\\Users\\dhanu\\.nuget\\packages\\microsoft.powerapps.msbuild.solution\\1.40.4\\microsoft.powerapps.msbuild.solution.1.40.4.nupkg.sha512"
+  ],
+  "logs": []
+}
