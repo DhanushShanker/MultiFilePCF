@@ -110,11 +110,6 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         this.closePreviewButton.addEventListener("click", () => this.closePreview());
 }
 
-    // const accountId = this.context.parameters.accountId.raw;
-    // if (accountId) {
-    //     this.retrieveFiles(accountId);  // Retrieve files associated with the account
-    // }
-    // Try to get the record ID using Xrm.Page (legacy method)
     let accountId = Xrm?.Page?.data?.entity?.getId();
  
     if (accountId) {
@@ -138,15 +133,14 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
         const input = event.target as HTMLInputElement;
         if (input.files) {
             Array.from(input.files).forEach((file) => {
+                if (!this.isSupportedFileType(file.type)) {
+                    alert("This file type is not supported");
+                    return;
+                }
                 this.uploadedFiles.push(file);
+
                 this.addFileToList(file);
     
-                // const accountId = this.context.parameters.accountId.raw;
-                // if (!accountId) {
-                //     console.error("Account ID is null or undefined. File upload aborted.");
-                //     return;
-                // }
-                // Try to get the record ID using Xrm.Page (legacy method)
         let accountId = Xrm?.Page?.data?.entity?.getId();
  
         if (accountId) {
@@ -154,7 +148,7 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
             accountId = accountId.replace("{", "").replace("}", "").toLowerCase();
             console.log("Current Record GUID (Xrm.Page): " + accountId);
  
-            this.retrieveFiles(accountId);
+            //this.retrieveFiles(accountId);
         } else {
             console.error("No record ID found.");
         }
@@ -187,6 +181,18 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
             // Notify that output has changed if needed
             this.notifyOutputChanged();
         }
+    }
+
+    private isSupportedFileType(fileType: string): boolean {
+        const supportedTypes = [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "image/jpeg",
+            "image/png",
+            "image/gif"
+        ];
+        return supportedTypes.includes(fileType);
     }
 
     private addFileToList(file: File): void {
@@ -483,8 +489,6 @@ export class FileUploaderControl implements ComponentFramework.StandardControl<I
             documentbody: base64FileContent,
             filename: filename,
             mimetype: filetype,
-            //"objectid_account@odata.bind": `/accounts(${accountId})`,
-            //"objectid_ats_job_seeker@odata.bind": `/ats_job_seekers(${accountId})`,
             [`objectid_${entityMetadata}@odata.bind`]: `/${entitySetName}(${accountId})`,// It will get the entity name dynamically
             subject: "Uploaded File",
         };
