@@ -1,0 +1,2 @@
+C:\DHANUSH\MultiFilePCF\FileUploaderControl\UPLOADER\obj\Debug\UPLOADER.cdsproj.AssemblyReference.cache
+C:\DHANUSH\MultiFilePCF\FileUploaderControl\UPLOADER\obj\Debug\UPLOADER.cdsproj.CoreCompileInputs.cache
