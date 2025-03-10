@@ -12,7 +12,7 @@ Features:
 
 Installation:
 -------------
-1. Download the latest managed solution ZIP file using (https://github.com/DhanushShanker/MultiFilePCF/blob/main/FileUploaderControl/UPLOADER/bin/Debug/UPLOADER.zip)) and click download.<br>
+1. Download the latest managed solution ZIP file using (https://github.com/DhanushShanker/MultiFilePCF/blob/main/UPLOADER_Managed.zip)) and click download.<br>
 2. Import the solution into your Power Apps environment.<br>
 3. Navigate to Power Apps > Solutions.<br>
 4. Click Import and upload the ZIP file.<br>
